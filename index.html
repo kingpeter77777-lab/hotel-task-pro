@@ -505,6 +505,34 @@
             font-size: 0.7rem;
             margin-bottom: 3px;
             opacity: 0.8;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .message-delete-btn {
+            background: none;
+            border: none;
+            color: inherit;
+            cursor: pointer;
+            opacity: 0.6;
+            padding: 2px 6px;
+            margin-left: 8px;
+            font-size: 0.8rem;
+            transition: var(--transition);
+        }
+
+        .message-delete-btn:hover {
+            opacity: 1;
+            color: var(--danger);
+        }
+
+        .message-bubble.own .message-delete-btn {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .message-bubble.own .message-delete-btn:hover {
+            color: white;
         }
 
         .chat-input-area {
@@ -2731,6 +2759,16 @@
                         <i class="fas fa-tasks"></i> Hosszú távú feladatok mentése
                     </button>
                 </div>
+
+                <div style="margin-top: 20px;">
+                    <div class="task-info-label">
+                        <i class="fas fa-clipboard-list"></i> Leltárkészlet
+                    </div>
+                    <textarea id="room-inventory" placeholder="Szoba leltárkészlete (megjegyzések, hiányzó vagy sérült tárgyak)..." rows="4" style="width: 100%;"></textarea>
+                    <button class="btn" style="background: var(--info); margin-top: 10px; width: 100%;" onclick="saveRoomInventory()">
+                        <i class="fas fa-save"></i> Leltár mentése
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -3127,7 +3165,8 @@
                 canManageUsers: true,
                 canManageRooms: true,
                 canManageComments: true,
-                canAssignTasks: true
+                canAssignTasks: true,
+                canModerateChat: true
             },
             supervisor: {
                 canAddTask: true,
@@ -3136,7 +3175,8 @@
                 canManageUsers: false,
                 canManageRooms: true,
                 canManageComments: true,
-                canAssignTasks: true
+                canAssignTasks: true,
+                canModerateChat: false
             },
             reception: {
                 canAddTask: true,
@@ -3145,7 +3185,8 @@
                 canManageUsers: false,
                 canManageRooms: false,
                 canManageComments: true,
-                canAssignTasks: false
+                canAssignTasks: false,
+                canModerateChat: false
             },
             szobaasszony: {
                 canAddTask: true,
@@ -3154,7 +3195,8 @@
                 canManageUsers: false,
                 canManageRooms: false,
                 canManageComments: true,
-                canAssignTasks: false
+                canAssignTasks: false,
+                canModerateChat: false
             },
             karbantarto: {
                 canAddTask: true,
@@ -3163,7 +3205,8 @@
                 canManageUsers: false,
                 canManageRooms: false,
                 canManageComments: true,
-                canAssignTasks: false
+                canAssignTasks: false,
+                canModerateChat: false
             }
         };
 
@@ -3213,6 +3256,11 @@
                 
                 showNotification(`Üdvözöljük, ${currentUserNickname}! (${ROLE_LABELS[currentUserRole]})`);
                 
+                // Frissítsük a kommentes szűrést
+                setTimeout(() => {
+                    refreshCommentsFilter();
+                }, 2000);
+                
             } else {
                 loginScreen.style.display = 'flex';
                 loginScreen.classList.remove('hidden');
@@ -3222,7 +3270,6 @@
                 if (unsubscribeTasks) unsubscribeTasks();
                 if (unsubscribeChat) unsubscribeChat();
                 
-                // Unsubscribe from all comment listeners
                 Object.values(unsubscribeComments).forEach(unsub => unsub());
                 unsubscribeComments = {};
             }
@@ -3418,7 +3465,6 @@
                     });
                 });
                 
-                // Frissítsük a select elemeket
                 updateUserSelects();
             } catch (error) {
                 console.error("Hiba a felhasználók listájának betöltésekor:", error);
@@ -3434,7 +3480,6 @@
             
             selects.forEach(select => {
                 if (select) {
-                    // Tartsuk meg a jelenlegi értéket
                     const currentValue = select.value;
                     select.innerHTML = '<option value="">Nincs felelős</option><option value="me">Én</option>';
                     
@@ -3445,7 +3490,6 @@
                         select.appendChild(option);
                     });
                     
-                    // Állítsuk vissza az előző értéket
                     select.value = currentValue;
                 }
             });
@@ -3453,12 +3497,10 @@
 
         // ========== FELADATKOMMENTEK KEZELÉSE ==========
         function initTaskComments(taskId) {
-            // Unsubscribe from previous comment listener for this task if exists
             if (unsubscribeComments[taskId]) {
                 unsubscribeComments[taskId]();
             }
             
-            // Subscribe to comments for this task
             unsubscribeComments[taskId] = db.collection('tasks').doc(taskId).collection('comments')
                 .orderBy('createdAt', 'asc')
                 .onSnapshot(snapshot => {
@@ -3471,10 +3513,8 @@
                         comments[taskId].push(comment);
                     });
                     
-                    // Update task card comment indicator
                     updateTaskCommentIndicator(taskId);
                     
-                    // Update comments in modal if it's open for this task
                     if (currentTaskId === taskId && document.getElementById('task-modal').classList.contains('active')) {
                         renderComments(taskId);
                     }
@@ -3486,13 +3526,11 @@
             const taskCard = document.querySelector(`.compact-card[data-id="${taskId}"]`);
             
             if (taskCard) {
-                // Remove existing indicator
                 const existingIndicator = taskCard.querySelector('.comment-indicator');
                 if (existingIndicator) {
                     existingIndicator.remove();
                 }
                 
-                // Add new indicator if there are comments
                 if (taskComments.length > 0) {
                     const indicator = document.createElement('div');
                     indicator.className = 'comment-indicator';
@@ -3520,12 +3558,10 @@
 
                 await db.collection('tasks').doc(taskId).collection('comments').add(commentData);
                 
-                // Update task's last updated timestamp
                 await db.collection('tasks').doc(taskId).update({
                     updated: firebase.firestore.FieldValue.serverTimestamp()
                 });
 
-                // Send notification to chat
                 const task = tasks.find(t => t.id === taskId);
                 if (task) {
                     db.collection('messages').add({
@@ -3598,7 +3634,6 @@
                 commentsList.appendChild(commentItem);
             });
             
-            // Scroll to bottom
             commentsList.scrollTop = commentsList.scrollHeight;
         }
 
@@ -3657,7 +3692,6 @@
         function applySearchAndFilters(taskList) {
             let filtered = taskList;
             
-            // Apply text search
             if (currentSearchQuery) {
                 filtered = filtered.filter(task => {
                     return (
@@ -3670,7 +3704,6 @@
                 });
             }
             
-            // Apply advanced filters
             const dateFrom = document.getElementById('filterDateFrom').value;
             const dateTo = document.getElementById('filterDateTo').value;
             const assignedTo = document.getElementById('filterAssignedTo').value;
@@ -3777,6 +3810,7 @@
                         status: 'green',
                         notes: [],
                         longTermTasks: '',
+                        inventory: '',
                         lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
                     });
                 }
@@ -3797,6 +3831,7 @@
                         status: roomData.status || 'green',
                         notes: notes,
                         longTermTasks: roomData.longTermTasks || '',
+                        inventory: roomData.inventory || '',
                         lastUpdated: roomData.lastUpdated?.toDate ? roomData.lastUpdated.toDate() : new Date(roomData.lastUpdated)
                     });
                 });
@@ -3849,6 +3884,7 @@
             
             document.getElementById('room-notes').value = '';
             document.getElementById('room-long-term-tasks').value = room.longTermTasks || '';
+            document.getElementById('room-inventory').value = room.inventory || '';
             
             updateRoomNotesHistory();
             
@@ -4000,6 +4036,47 @@
             });
         }
 
+        // ========== SZOBA LEVTÁRKEZELÉS ==========
+        function saveRoomInventory() {
+            if (!currentRoomModal) return;
+            
+            const inventory = document.getElementById('room-inventory').value.trim();
+            
+            const roomIndex = rooms.findIndex(r => r.id === currentRoomModal.id);
+            if (roomIndex !== -1) {
+                rooms[roomIndex].inventory = inventory;
+                currentRoomModal.inventory = inventory;
+            }
+            
+            db.collection('rooms').doc(currentRoomModal.id).update({
+                inventory: inventory,
+                lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+            })
+            .then(() => {
+                showNotification("Leltárkészlet mentve");
+                
+                const noteText = inventory ? `Leltár frissítve: ${inventory.substring(0, 100)}${inventory.length > 100 ? '...' : ''}` : "Leltár törölve";
+                const newNote = {
+                    text: noteText,
+                    date: firebase.firestore.FieldValue.serverTimestamp(),
+                    user: currentUserNickname,
+                    userId: currentUser.uid,
+                    type: 'inventory'
+                };
+                
+                return db.collection('rooms').doc(currentRoomModal.id).update({
+                    notes: firebase.firestore.FieldValue.arrayUnion(newNote)
+                });
+            })
+            .then(() => {
+                updateRoomNotesHistory();
+            })
+            .catch(error => {
+                console.error("Hiba a leltár mentésekor:", error);
+                showNotification("Hiba a mentés során");
+            });
+        }
+
         // ========== JOGOSULTSÁG KEZELÉS ==========
         function loadPermissions() {
             const savedPermissions = localStorage.getItem('hotel_task_permissions');
@@ -4073,7 +4150,8 @@
                 'canManageUsers': 'Felhasználók kezelése',
                 'canManageRooms': 'Szobák kezelése',
                 'canManageComments': 'Hozzászólások kezelése',
-                'canAssignTasks': 'Feladatok kiosztása'
+                'canAssignTasks': 'Feladatok kiosztása',
+                'canModerateChat': 'Chat moderálás'
             };
             return labels[permission] || permission;
         }
@@ -4116,7 +4194,10 @@
                     chatMessages.innerHTML = '';
                     
                     snapshot.forEach(async (doc) => {
-                        const msg = doc.data();
+                        const msg = {
+                            id: doc.id,
+                            ...doc.data()
+                        };
                         await renderMessage(msg);
                     });
                     
@@ -4141,8 +4222,18 @@
                 timeStr = date.getHours() + ":" + String(date.getMinutes()).padStart(2, '0');
             }
 
+            let deleteButton = '';
+            if (currentUserRole === ROLES.ADMIN || msg.senderId === currentUser.uid) {
+                deleteButton = `<button class="message-delete-btn" onclick="deleteMessage('${msg.id}')" title="Üzenet törlése">
+                                  <i class="fas fa-trash"></i>
+                                </button>`;
+            }
+
             div.innerHTML = `
-                <div class="message-info">${isOwn ? 'Én' : senderNickname} • ${timeStr}</div>
+                <div class="message-info">
+                    ${isOwn ? 'Én' : senderNickname} • ${timeStr}
+                    ${deleteButton}
+                </div>
                 <div>${msg.text}</div>
             `;
             
@@ -4187,6 +4278,28 @@
             }
         });
 
+        // ========== CHAT MODERÁLÁS ==========
+        async function deleteMessage(messageId) {
+            if (!confirm("Biztosan törli ezt az üzenetet?")) return;
+            
+            try {
+                await db.collection('messages').doc(messageId).delete();
+                
+                db.collection('messages').add({
+                    text: `🗑️ Üzenet törölve (Admin: ${currentUserNickname})`,
+                    senderId: currentUser.uid,
+                    senderNickname: 'Rendszer',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    isSystem: true
+                });
+                
+                showNotification("Üzenet törölve");
+            } catch (error) {
+                console.error("Hiba az üzenet törlésekor:", error);
+                showNotification("Hiba az üzenet törlésekor");
+            }
+        }
+
         // ========== FELADATKEZELŐ FUNKCIÓK ==========
         function initTasks() {
             if (unsubscribeTasks) unsubscribeTasks();
@@ -4201,19 +4314,23 @@
                             ...doc.data()
                         };
                         
-                        // Get assigned user's name if exists
                         if (task.assignedTo) {
                             task.assignedToName = await getUserNickname(task.assignedTo);
                         }
                         
                         tasks.push(task);
-                        
-                        // Initialize comments for this task
                         initTaskComments(doc.id);
                     });
                     
                     renderTasks();
                     updateMenuStats();
+                    
+                    const currentFilter = document.getElementById('f-period').value;
+                    if (currentFilter === 'withComments') {
+                        setTimeout(() => {
+                            renderTasks();
+                        }, 500);
+                    }
                 });
         }
 
@@ -4259,15 +4376,12 @@
                 filteredTasks = filteredTasks.filter(task => task.category === currentCategory);
             }
             
-            // Apply search and advanced filters
             filteredTasks = applySearchAndFilters(filteredTasks);
             
             filteredTasks.sort((a, b) => {
-                // Sort by priority first (higher priority first)
                 if (b.prio !== a.prio) {
                     return b.prio - a.prio;
                 }
-                // Then by creation date (newer first)
                 const dateA = a.created?.toDate ? a.created.toDate() : new Date(a.created);
                 const dateB = b.created?.toDate ? b.created.toDate() : new Date(b.created);
                 return dateB - dateA;
@@ -4279,9 +4393,17 @@
             
             updateColumnCounts();
             
-            // Update search results info if there's a search query
             if (currentSearchQuery) {
                 updateSearchResultsInfo();
+            }
+        }
+
+        function refreshCommentsFilter() {
+            const currentFilter = document.getElementById('f-period').value;
+            if (currentFilter === 'withComments') {
+                setTimeout(() => {
+                    renderTasks();
+                }, 1000);
             }
         }
 
@@ -4339,7 +4461,6 @@
                 </div>
             `;
             
-            // Add comment indicator if there are comments
             if (taskComments.length > 0) {
                 const indicator = document.createElement('div');
                 indicator.className = 'comment-indicator';
@@ -4455,7 +4576,6 @@
                 
                 await db.collection('tasks').doc(taskId).update(updateData);
                 
-                // Send notification to chat
                 const task = tasks.find(t => t.id === taskId);
                 if (task) {
                     let message = '';
@@ -4509,7 +4629,6 @@
             
             db.collection('tasks').doc(taskId).delete()
                 .then(async () => {
-                    // Delete all comments for this task
                     const commentsSnapshot = await db.collection('tasks').doc(taskId).collection('comments').get();
                     const deletePromises = [];
                     commentsSnapshot.forEach(doc => {
@@ -4619,7 +4738,6 @@
             document.getElementById('modal-creator').textContent = task.userNickname || 'Ismeretlen';
             document.getElementById('modal-comments-count').textContent = taskComments.length;
             
-            // Update assigned to select
             const assignedToSelect = document.getElementById('modal-assignedTo');
             assignedToSelect.value = task.assignedTo || '';
             assignedToSelect.onchange = () => {
@@ -4631,7 +4749,6 @@
                 }
             };
             
-            // Update due date
             const dueDateInput = document.getElementById('modal-dueDate');
             dueDateInput.value = task.dueDate || '';
             dueDateInput.onchange = () => {
@@ -4669,7 +4786,6 @@
             };
             document.getElementById('modal-delete').onclick = () => deleteTask(task.id);
             
-            // Setup comment form
             const commentForm = document.getElementById('comment-form');
             commentForm.onsubmit = (e) => {
                 e.preventDefault();
@@ -4677,7 +4793,6 @@
                 addComment(task.id, commentInput.value);
             };
             
-            // Render comments
             renderComments(task.id);
             
             document.getElementById('task-modal').classList.add('active');
@@ -4774,7 +4889,6 @@
                     toggleAdminPanel();
                 }
                 
-                // Update all users list
                 await loadAllUsersList();
                 
                 showNotification(`Felhasználó rangja frissítve: ${ROLE_LABELS[newRole]}`);
@@ -4933,7 +5047,6 @@
                 return completedDate.toDateString() === todayStr;
             }).length;
             
-            // Count tasks with comments
             let tasksWithComments = 0;
             Object.keys(comments).forEach(taskId => {
                 if (comments[taskId] && comments[taskId].length > 0) {
@@ -4941,7 +5054,6 @@
                 }
             });
             
-            // Count overdue tasks
             let overdueTasks = 0;
             tasks.forEach(task => {
                 if (task.dueDate && task.status !== 'done') {
@@ -5040,14 +5152,12 @@
                 saveSettings();
             });
             
-            // Search input enter key
             document.getElementById('searchInput').addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
                     performSearch();
                 }
             });
             
-            // Comment form submit
             document.getElementById('comment-form').addEventListener('submit', function(e) {
                 e.preventDefault();
                 if (currentTaskId) {
@@ -5168,7 +5278,6 @@
             try {
                 const allComments = [];
                 
-                // Collect comments from all tasks
                 for (const task of tasks) {
                     const commentsSnapshot = await db.collection('tasks').doc(task.id).collection('comments').get();
                     commentsSnapshot.forEach(doc => {
@@ -5202,7 +5311,6 @@
 
         // ========== INICIALIZÁLÁS ==========
         document.addEventListener('DOMContentLoaded', function() {
-            // FAB gomb megjelenítése görgetéskor
             window.addEventListener('scroll', function() {
                 const fab = document.getElementById('fab');
                 if (window.scrollY > 300) {
@@ -5212,7 +5320,6 @@
                 }
             });
             
-            // Search input focus
             document.getElementById('searchInput').addEventListener('focus', function() {
                 document.getElementById('advancedFilters').classList.add('expanded');
             });
