@@ -1029,12 +1029,19 @@ Kattintson a mikrofon gombra a diktáláshoz
 </div>
 </div>
 <div style=display:flex;gap:12px;flex-wrap:wrap>
-<button class=btn style=background:var(--warning) onclick=loadAllUsers()>
-<i class="fas fa-sync-alt"></i> Frissítés
-</button>
-<button class=btn style=background:var(--danger) onclick=deleteInactiveUsers()>
-<i class="fas fa-user-slash"></i> Inaktívak törlése
-</button>
+
+<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px">
+    <button class=btn style=background:var(--warning) onclick=loadAllUsers()>
+        <i class="fas fa-sync-alt"></i> Felhasználók frissítése
+    </button>
+    <button class=btn style=background:var(--danger) onclick=deleteInactiveUsers()>
+        <i class="fas fa-user-slash"></i> Inaktívak törlése
+    </button>
+    <!-- ÚJ GOMB -->
+    <button class=btn style="background:var(--info)" onclick=openRolePermissionsManager()>
+        <i class="fas fa-users-cog"></i> Szerepkörök kezelése
+    </button>
+</div>
 </div>
 </div>
 </div>
@@ -1205,6 +1212,79 @@ Kattintson a mikrofon gombra a diktáláshoz
 </div>
 </div>
 <!-- Jogosultságok modal -->
+
+<!-- Role Permissions Manager Modal -->
+<div class=task-modal id=role-permissions-manager-modal>
+<div class=task-modal-content style="max-width:800px">
+<div class=task-modal-header>
+    <h3><i class="fas fa-users-cog"></i> Szerepkörök kezelése</h3>
+    <button class=task-modal-close onclick=closeRolePermissionsManagerModal()>×</button>
+</div>
+<div class=task-modal-body>
+    <div class=task-info-grid style="grid-template-columns:1fr">
+        <div class=task-info-item>
+            <div class=task-info-label>Válassz szerepkört</div>
+            <div class=task-info-value>
+                <select id=role-permissions-select onchange=loadRolePermissions(this.value) style="padding:12px 16px;border-radius:12px;border:2px solid oklch(90% .05 260);font-size:1rem;background:var(--card-bg);width:100%">
+                    <option value=supervisor>Supervisor</option>
+                    <option value=reception>Recepciós</option>
+                    <option value=szobaasszony>Szobaasszony</option>
+                    <option value=karbantarto>Karbantartó</option>
+                </select>
+                <small style="display:block;margin-top:8px;color:var(--gray);font-size:0.9rem">
+                    <i class="fas fa-info-circle"></i> Az Admin szerepkör minden jogosultsággal rendelkezik, ezért nem szerkeszthető.
+                </small>
+            </div>
+        </div>
+    </div>
+    
+    <div class=task-description style="margin-top:20px">
+        <div class=task-description-label>
+            <i class="fas fa-key"></i> Jogosultságok a(z) <span id=selected-role-name>Supervisor</span> szerepkörhöz
+        </div>
+        <div class=permissions-grid id=role-permissions-grid>
+            <!-- Jogosultságok betöltődnek ide -->
+        </div>
+    </div>
+    
+    <div class=task-info-grid style="grid-template-columns:1fr;margin-top:20px">
+        <div class=task-info-item>
+            <div class=task-info-label>Műveletek</div>
+            <div class=task-info-value>
+                <div style="display:flex;gap:12px;flex-wrap:wrap">
+                    <button class=btn onclick=saveRolePermissions() style="background:var(--primary)">
+                        <i class="fas fa-save"></i> Mentés
+                    </button>
+                    <button class=btn onclick=applyToAllUsers() style="background:var(--secondary)">
+                        <i class="fas fa-user-friends"></i> Alkalmaz minden felhasználóra
+                    </button>
+                    <button class=btn onclick=resetRolePermissions() style="background:var(--warning)">
+                        <i class="fas fa-undo"></i> Alapértelmezett
+                    </button>
+                    <button class=btn onclick=closeRolePermissionsManagerModal() style="background:var(--gray)">
+                        <i class="fas fa-times"></i> Bezár
+                    </button>
+                </div>
+                <small style="display:block;margin-top:12px;color:var(--gray);font-size:0.9rem">
+                    <i class="fas fa-exclamation-triangle"></i> Figyelem: Az "Alkalmaz minden felhasználóra" gomb felülírja az összes felhasználó egyéni jogosultságait!
+                </small>
+            </div>
+        </div>
+    </div>
+    
+    <div class=task-info-item style="margin-top:20px">
+        <div class=task-info-label>Érintett felhasználók</div>
+        <div class=task-info-value>
+            <div id=affected-users-list style="max-height:200px;overflow-y:auto;padding:10px;background:oklch(98% .02 260 / .9);border-radius:12px;border:1px solid oklch(90% .05 260 / .5)">
+                <div style="text-align:center;padding:20px;color:var(--gray)">
+                    <i class="fas fa-spinner fa-spin"></i> Felhasználók betöltése...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+</div>
 <div class=task-modal id=permissions-modal>
 <div class=task-modal-content>
 <div class=task-modal-header>
@@ -1263,6 +1343,280 @@ Kattintson a mikrofon gombra a diktáláshoz
 <script src=https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js></script>
 <script src=https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js></script>
 <script>
+// Új változók
+let rolePermissionsManager = {
+    currentRole: null,
+    originalPermissions: {},
+    affectedUsers: []
+};
+
+// Modal kezelés
+function openRolePermissionsManager() {
+    if (currentUserRole !== ROLES.ADMIN) {
+        showNotification("Csak adminok módosíthatják a szerepköröket!");
+        return;
+    }
+    
+    document.getElementById('role-permissions-manager-modal').classList.add('active');
+    document.getElementById('role-permissions-select').value = 'supervisor';
+    loadRolePermissions('supervisor');
+}
+
+function closeRolePermissionsManagerModal() {
+    document.getElementById('role-permissions-manager-modal').classList.remove('active');
+    rolePermissionsManager.currentRole = null;
+    rolePermissionsManager.originalPermissions = {};
+}
+
+// Szerepkör jogosultságok betöltése
+async function loadRolePermissions(role) {
+    rolePermissionsManager.currentRole = role;
+    
+    // Frissítjük a felhasználóbarát szerepkör nevet
+    document.getElementById('selected-role-name').textContent = ROLE_LABELS[role] || role;
+    
+    try {
+        // Betöltjük a mentett jogosultságokat, ha vannak
+        const roleDoc = await db.collection('system').doc(`role_permissions_${role}`).get();
+        let permissions = {};
+        
+        if (roleDoc.exists) {
+            permissions = roleDoc.data().permissions || {};
+            rolePermissionsManager.originalPermissions = { ...permissions };
+        } else {
+            // Alapértelmezett jogosultságok
+            permissions = DEFAULT_PERMISSIONS[role] || {};
+            rolePermissionsManager.originalPermissions = { ...DEFAULT_PERMISSIONS[role] };
+        }
+        
+        // Betöltjük a felületre
+        const permissionsGrid = document.getElementById('role-permissions-grid');
+        permissionsGrid.innerHTML = '';
+        
+        Object.keys(PERMISSION_LABELS).forEach(permissionKey => {
+            const isChecked = permissions[permissionKey] || false;
+            const isDefault = DEFAULT_PERMISSIONS[role]?.[permissionKey] || false;
+            
+            const permissionItem = document.createElement('div');
+            permissionItem.className = 'permission-item';
+            permissionItem.title = isDefault ? 'Alapértelmezett jogosultság' : 'Egyéni beállítás';
+            
+            permissionItem.innerHTML = `
+                <input type="checkbox" id="role-perm-${permissionKey}" ${isChecked ? 'checked' : ''}>
+                <label for="role-perm-${permissionKey}">
+                    ${PERMISSION_LABELS[permissionKey]}
+                    ${isDefault ? '<span style="font-size:0.8em;color:var(--secondary);margin-left:5px">(alapértelmezett)</span>' : ''}
+                </label>
+            `;
+            
+            permissionsGrid.appendChild(permissionItem);
+        });
+        
+        // Betöltjük az érintett felhasználókat
+        await loadAffectedUsers(role);
+        
+    } catch (e) {
+        console.error('Hiba a szerepkör jogosultságok betöltésekor:', e);
+        showNotification('Hiba a jogosultságok betöltésekor');
+    }
+}
+
+// Érintett felhasználók betöltése
+async function loadAffectedUsers(role) {
+    try {
+        const usersSnapshot = await db.collection('users').where('role', '==', role).get();
+        rolePermissionsManager.affectedUsers = [];
+        
+        const affectedList = document.getElementById('affected-users-list');
+        affectedList.innerHTML = '';
+        
+        if (usersSnapshot.empty) {
+            affectedList.innerHTML = `
+                <div style="text-align:center;padding:20px;color:var(--gray)">
+                    <i class="fas fa-user-slash"></i> Nincs felhasználó ezzel a szerepkörrel
+                </div>
+            `;
+            return;
+        }
+        
+        usersSnapshot.forEach(doc => {
+            const userData = doc.data();
+            rolePermissionsManager.affectedUsers.push({
+                id: doc.id,
+                ...userData
+            });
+            
+            const userElement = document.createElement('div');
+            userElement.style.cssText = `
+                padding: 10px;
+                margin-bottom: 8px;
+                background: ${doc.id === currentUser.uid ? 'oklch(95% 0.05 240 / .3)' : 'oklch(98% .02 260 / .9)'};
+                border-radius: 8px;
+                border-left: 4px solid var(--primary);
+                font-size: 0.9rem;
+            `;
+            
+            userElement.innerHTML = `
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <div>
+                        <strong>${userData.nickname || userData.email}</strong>
+                        ${doc.id === currentUser.uid ? ' <span style="color:var(--info)">(én)</span>' : ''}
+                    </div>
+                    <div style="font-size:0.85rem;color:var(--gray)">
+                        ${userData.email}
+                    </div>
+                </div>
+            `;
+            
+            affectedList.appendChild(userElement);
+        });
+        
+    } catch (e) {
+        console.error('Hiba a felhasználók betöltésekor:', e);
+    }
+}
+
+// Szerepkör jogosultságok mentése
+async function saveRolePermissions() {
+    const role = rolePermissionsManager.currentRole;
+    if (!role) return;
+    
+    try {
+        const permissions = {};
+        const checkboxes = document.querySelectorAll('#role-permissions-grid input[type="checkbox"]');
+        
+        checkboxes.forEach(checkbox => {
+            const permissionId = checkbox.id.replace('role-perm-', '');
+            permissions[permissionId] = checkbox.checked;
+        });
+        
+        await db.collection('system').doc(`role_permissions_${role}`).set({
+            role: role,
+            permissions: permissions,
+            updatedBy: currentUser.uid,
+            updatedByName: currentUserNickname,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        
+        showNotification(`${ROLE_LABELS[role]} szerepkör jogosultságai mentve!`);
+        
+        // Cache frissítése
+        userCache.set(`role_permissions_${role}`, permissions);
+        
+    } catch (e) {
+        console.error('Hiba a szerepkör jogosultságok mentésekor:', e);
+        showNotification('Hiba a mentés során');
+    }
+}
+
+// Alkalmaz minden felhasználóra
+async function applyToAllUsers() {
+    const role = rolePermissionsManager.currentRole;
+    if (!role || !confirm(`Biztosan alkalmazza ezeket a jogosultságokat az összes ${ROLE_LABELS[role]} felhasználóra? Ez felülírja az összes egyéni beállítást!`)) {
+        return;
+    }
+    
+    try {
+        // Összegyűjtjük a jelenlegi beállításokat
+        const permissions = {};
+        const checkboxes = document.querySelectorAll('#role-permissions-grid input[type="checkbox"]');
+        
+        checkboxes.forEach(checkbox => {
+            const permissionId = checkbox.id.replace('role-perm-', '');
+            permissions[permissionId] = checkbox.checked;
+        });
+        
+        // Frissítjük az összes felhasználót
+        const batch = db.batch();
+        const usersSnapshot = await db.collection('users').where('role', '==', role).get();
+        let updatedCount = 0;
+        
+        usersSnapshot.forEach(doc => {
+            batch.update(doc.ref, {
+                permissions: permissions,
+                permissionsUpdated: firebase.firestore.FieldValue.serverTimestamp(),
+                permissionsUpdatedBy: currentUser.uid,
+                permissionsUpdatedByName: currentUserNickname
+            });
+            updatedCount++;
+            
+            // Cache frissítése
+            if (userCache.has(doc.id)) {
+                userCache.set(doc.id + '_permissions', permissions);
+            }
+        });
+        
+        await batch.commit();
+        showNotification(`${updatedCount} felhasználó jogosultságai frissítve!`);
+        
+        // Újratöltjük az érintett felhasználók listáját
+        await loadAffectedUsers(role);
+        
+    } catch (e) {
+        console.error('Hiba a jogosultságok alkalmazásakor:', e);
+        showNotification('Hiba az alkalmazás során');
+    }
+}
+
+// Alapértelmezett értékek visszaállítása
+async function resetRolePermissions() {
+    const role = rolePermissionsManager.currentRole;
+    if (!role || !confirm(`Biztosan visszaállítja az alapértelmezett jogosultságokat a(z) ${ROLE_LABELS[role]} szerepkörhöz?`)) {
+        return;
+    }
+    
+    try {
+        // Töröljük a mentett beállításokat
+        await db.collection('system').doc(`role_permissions_${role}`).delete();
+        
+        // Betöltjük az alapértelmezett értékeket
+        const defaultPermissions = DEFAULT_PERMISSIONS[role] || {};
+        
+        // Frissítjük a felületet
+        const permissionsGrid = document.getElementById('role-permissions-grid');
+        permissionsGrid.innerHTML = '';
+        
+        Object.keys(PERMISSION_LABELS).forEach(permissionKey => {
+            const isChecked = defaultPermissions[permissionKey] || false;
+            
+            const permissionItem = document.createElement('div');
+            permissionItem.className = 'permission-item';
+            
+            permissionItem.innerHTML = `
+                <input type="checkbox" id="role-perm-${permissionKey}" ${isChecked ? 'checked' : ''}>
+                <label for="role-perm-${permissionKey}">
+                    ${PERMISSION_LABELS[permissionKey]}
+                    <span style="font-size:0.8em;color:var(--secondary);margin-left:5px">(alapértelmezett)</span>
+                </label>
+            `;
+            
+            permissionsGrid.appendChild(permissionItem);
+        });
+        
+        showNotification(`${ROLE_LABELS[role]} szerepkör jogosultságai visszaállítva az alapértelmezettre`);
+        
+    } catch (e) {
+        console.error('Hiba a visszaállítás során:', e);
+        showNotification('Hiba a visszaállítás során');
+    }
+}
+
+// A felhasználó jogosultságainak betöltésekor használjuk a szerepkör alapú jogosultságokat
+async function getUserPermissions(userId, userRole) {
+    // Először megpróbáljuk a szerepkör alapú jogosultságokat betölteni
+    try {
+        const rolePermissionsDoc = await db.collection('system').doc(`role_permissions_${userRole}`).get();
+        
+        if (rolePermissionsDoc.exists) {
+            return rolePermissionsDoc.data().permissions || DEFAULT_PERMISSIONS[userRole] || {};
+        }
+    } catch (e) {
+        console.error('Hiba a szerepkör jogosultságok betöltésekor:', e);
+    }
+    
+    // Ha nincs szerepkör alapú beállítás, visszatérünk az alapértelmezettekkel
+    return DEFAULT_PERMISSIONS[userRole] || {};
+}
 const firebaseConfig={
     apiKey:"AIzaSyALaMLBsuwfoL0f_nCZrLOOFoPrwFWcK-Y",
     authDomain:"hotel-task-d6ccb.firebaseapp.com",
@@ -1366,86 +1720,104 @@ const CATEGORY_LABELS={
 };
 
 // Új: Jogosultságok definíciója
-const PERMISSIONS={
-    CAN_EDIT_TASKS:"Feladatok szerkesztése",
-    CAN_DELETE_TASKS:"Feladatok törlése",
-    CAN_MANAGE_ROOMS:"Szobák kezelése",
-    CAN_MANAGE_USERS:"Felhasználók kezelése",
-    CAN_EXPORT_DATA:"Adatok exportálása",
-    CAN_VIEW_STATISTICS:"Statisztikák megtekintése",
-    CAN_MANAGE_COMMENTS:"Hozzászólások kezelése",
-    CAN_ASSIGN_TASKS:"Feladatok kiosztása",
-    CAN_CHANGE_STATUS:"Státusz módosítása",
-    CAN_ADD_TASKS:"Új feladatok hozzáadása",
-    CAN_VIEW_ALL_TASKS:"Összes feladat megtekintése"
+// JAVÍTOTT: PERMISSIONS objektum - kulcsok legyenek string konstansok
+// Cseréld le a PERMISSIONS objektumot:
+// JAVÍTOTT PERMISSIONS objektum - egyszerűbb megközelítés
+const PERMISSIONS = {
+    'CAN_EDIT_TASKS': 'CAN_EDIT_TASKS',
+    'CAN_DELETE_TASKS': 'CAN_DELETE_TASKS',
+    'CAN_MANAGE_ROOMS': 'CAN_MANAGE_ROOMS',
+    'CAN_MANAGE_USERS': 'CAN_MANAGE_USERS',
+    'CAN_EXPORT_DATA': 'CAN_EXPORT_DATA',
+    'CAN_VIEW_STATISTICS': 'CAN_VIEW_STATISTICS',
+    'CAN_MANAGE_COMMENTS': 'CAN_MANAGE_COMMENTS',
+    'CAN_ASSIGN_TASKS': 'CAN_ASSIGN_TASKS',
+    'CAN_CHANGE_STATUS': 'CAN_CHANGE_STATUS',
+    'CAN_ADD_TASKS': 'CAN_ADD_TASKS',
+    'CAN_VIEW_ALL_TASKS': 'CAN_VIEW_ALL_TASKS'
 };
 
-// Alapértelmezett jogosultságok szerepenként
-const DEFAULT_PERMISSIONS={
-    admin:{
-        CAN_EDIT_TASKS:true,
-        CAN_DELETE_TASKS:true,
-        CAN_MANAGE_ROOMS:true,
-        CAN_MANAGE_USERS:true,
-        CAN_EXPORT_DATA:true,
-        CAN_VIEW_STATISTICS:true,
-        CAN_MANAGE_COMMENTS:true,
-        CAN_ASSIGN_TASKS:true,
-        CAN_CHANGE_STATUS:true,
-        CAN_ADD_TASKS:true,
-        CAN_VIEW_ALL_TASKS:true
+// PERMISSION_LABELS marad változatlan
+const PERMISSION_LABELS = {
+    'CAN_EDIT_TASKS': 'Feladatok szerkesztése',
+    'CAN_DELETE_TASKS': 'Feladatok törlése',
+    'CAN_MANAGE_ROOMS': 'Szobák kezelése',
+    'CAN_MANAGE_USERS': 'Felhasználók kezelése',
+    'CAN_EXPORT_DATA': 'Adatok exportálása',
+    'CAN_VIEW_STATISTICS': 'Statisztikák megtekintése',
+    'CAN_MANAGE_COMMENTS': 'Hozzászólások kezelése',
+    'CAN_ASSIGN_TASKS': 'Feladatok kiosztása',
+    'CAN_CHANGE_STATUS': 'Státusz módosítása',
+    'CAN_ADD_TASKS': 'Új feladatok hozzáadása',
+    'CAN_VIEW_ALL_TASKS': 'Összes feladat megtekintése'
+};
+
+// JAVÍTOTT DEFAULT_PERMISSIONS - egyszerűbb kulcsokkal
+const DEFAULT_PERMISSIONS = {
+    admin: {
+        'CAN_EDIT_TASKS': true,
+        'CAN_DELETE_TASKS': true,
+        'CAN_MANAGE_ROOMS': true,
+        'CAN_MANAGE_USERS': true,
+        'CAN_EXPORT_DATA': true,
+        'CAN_VIEW_STATISTICS': true,
+        'CAN_MANAGE_COMMENTS': true,
+        'CAN_ASSIGN_TASKS': true,
+        'CAN_CHANGE_STATUS': true,
+        'CAN_ADD_TASKS': true,
+        'CAN_VIEW_ALL_TASKS': true
     },
-    supervisor:{
-        CAN_EDIT_TASKS:true,
-        CAN_DELETE_TASKS:true,
-        CAN_MANAGE_ROOMS:true,
-        CAN_MANAGE_USERS:false,
-        CAN_EXPORT_DATA:true,
-        CAN_VIEW_STATISTICS:true,
-        CAN_MANAGE_COMMENTS:true,
-        CAN_ASSIGN_TASKS:true,
-        CAN_CHANGE_STATUS:true,
-        CAN_ADD_TASKS:true,
-        CAN_VIEW_ALL_TASKS:true
+    supervisor: {
+        'CAN_EDIT_TASKS': true,
+        'CAN_DELETE_TASKS': true,
+        'CAN_MANAGE_ROOMS': true,
+        'CAN_MANAGE_USERS': false,
+        'CAN_EXPORT_DATA': true,
+        'CAN_VIEW_STATISTICS': true,
+        'CAN_MANAGE_COMMENTS': true,
+        'CAN_ASSIGN_TASKS': true,
+        'CAN_CHANGE_STATUS': true,
+        'CAN_ADD_TASKS': true,
+        'CAN_VIEW_ALL_TASKS': true
     },
-    reception:{
-        CAN_EDIT_TASKS:true,
-        CAN_DELETE_TASKS:false,
-        CAN_MANAGE_ROOMS:true,
-        CAN_MANAGE_USERS:false,
-        CAN_EXPORT_DATA:false,
-        CAN_VIEW_STATISTICS:true,
-        CAN_MANAGE_COMMENTS:true,
-        CAN_ASSIGN_TASKS:true,
-        CAN_CHANGE_STATUS:true,
-        CAN_ADD_TASKS:true,
-        CAN_VIEW_ALL_TASKS:true
+    reception: {
+        'CAN_EDIT_TASKS': true,
+        'CAN_DELETE_TASKS': false,
+        'CAN_MANAGE_ROOMS': true,
+        'CAN_MANAGE_USERS': false,
+        'CAN_EXPORT_DATA': false,
+        'CAN_VIEW_STATISTICS': true,
+        'CAN_MANAGE_COMMENTS': true,
+        'CAN_ASSIGN_TASKS': true,
+        'CAN_CHANGE_STATUS': true,
+        'CAN_ADD_TASKS': true,
+        'CAN_VIEW_ALL_TASKS': true
     },
-    szobaasszony:{
-        CAN_EDIT_TASKS:true,
-        CAN_DELETE_TASKS:false,
-        CAN_MANAGE_ROOMS:true,
-        CAN_MANAGE_USERS:false,
-        CAN_EXPORT_DATA:false,
-        CAN_VIEW_STATISTICS:true,
-        CAN_MANAGE_COMMENTS:true,
-        CAN_ASSIGN_TASKS:false,
-        CAN_CHANGE_STATUS:true,
-        CAN_ADD_TASKS:true,
-        CAN_VIEW_ALL_TASKS:true
+    szobaasszony: {
+        'CAN_EDIT_TASKS': true,
+        'CAN_DELETE_TASKS': false,
+        'CAN_MANAGE_ROOMS': true,
+        'CAN_MANAGE_USERS': false,
+        'CAN_EXPORT_DATA': false,
+        'CAN_VIEW_STATISTICS': true,
+        'CAN_MANAGE_COMMENTS': true,
+        'CAN_ASSIGN_TASKS': false,
+        'CAN_CHANGE_STATUS': true,
+        'CAN_ADD_TASKS': true,
+        'CAN_VIEW_ALL_TASKS': true
     },
-    karbantarto:{
-        CAN_EDIT_TASKS:true,
-        CAN_DELETE_TASKS:false,
-        CAN_MANAGE_ROOMS:true,
-        CAN_MANAGE_USERS:false,
-        CAN_EXPORT_DATA:false,
-        CAN_VIEW_STATISTICS:false,
-        CAN_MANAGE_COMMENTS:true,
-        CAN_ASSIGN_TASKS:false,
-        CAN_CHANGE_STATUS:true,
-        CAN_ADD_TASKS:true,
-        CAN_VIEW_ALL_TASKS:false
+    karbantarto: {
+        'CAN_EDIT_TASKS': true,
+        'CAN_DELETE_TASKS': false,
+        'CAN_MANAGE_ROOMS': true,
+        'CAN_MANAGE_USERS': false,
+        'CAN_EXPORT_DATA': false,
+        'CAN_VIEW_STATISTICS': false,
+        'CAN_MANAGE_COMMENTS': true,
+        'CAN_ASSIGN_TASKS': false,
+        'CAN_CHANGE_STATUS': true,
+        'CAN_ADD_TASKS': true,
+        'CAN_VIEW_ALL_TASKS': false
     }
 };
 
@@ -1469,13 +1841,13 @@ async function loadUserProfile(user){
             currentUserRole="karbantarto";
             
             await db.collection("users").doc(user.uid).set({
-                email:user.email,
-                nickname:currentUserNickname,
-                role:currentUserRole,
-                permissions:DEFAULT_PERMISSIONS[currentUserRole]||{},
-                createdAt:firebase.firestore.FieldValue.serverTimestamp(),
-                lastLogin:firebase.firestore.FieldValue.serverTimestamp()
-            });
+    email: user.email,
+    nickname: currentUserNickname,
+    role: currentUserRole,
+    permissions: DEFAULT_PERMISSIONS[currentUserRole] || {},
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+});
             
             userCache.set(user.uid,currentUserNickname);
             updateUserRoleDisplay();
@@ -4144,89 +4516,99 @@ function initAllViews(){
 }
 
 // Jogosultságok kezelése - ÚJ FUNKCIÓK
-async function openPermissionsModal(userId){
-    try{
-        const userDoc=await db.collection("users").doc(userId).get();
-        if(!userDoc.exists){
+async function openPermissionsModal(userId) {
+    try {
+        const userDoc = await db.collection("users").doc(userId).get();
+        if (!userDoc.exists) {
             showNotification("Felhasználó nem található");
             return;
         }
-        
-        const userData=userDoc.data();
-        const permissions=userData.permissions||DEFAULT_PERMISSIONS[userData.role]||{};
-        
-        document.getElementById("permissions-username").textContent=userData.nickname||userData.email;
-        document.getElementById("permissions-userinfo").textContent=userData.nickname?
-            `${userData.nickname} (${ROLE_LABELS[userData.role]||userData.role})`:
+
+        const userData = userDoc.data();
+        const permissions = userData.permissions || DEFAULT_PERMISSIONS[userData.role] || {};
+
+        document.getElementById("permissions-username").textContent = userData.nickname || userData.email;
+        document.getElementById("permissions-userinfo").textContent = userData.nickname ?
+            `${userData.nickname} (${ROLE_LABELS[userData.role] || userData.role})` :
             userData.email;
-        document.getElementById("permissions-email").textContent=userData.email;
-        document.getElementById("permissions-role").value=userData.role||"karbantarto";
-        document.getElementById("permissions-status").textContent=userData.lastLogin?"Aktív":"Inaktív";
-        
-        const permissionsGrid=document.getElementById("permissions-grid");
-        permissionsGrid.innerHTML="";
-        
-        Object.entries(PERMISSIONS).forEach(([key,label]) => {
-           const permissionItem=document.createElement("div");
-           permissionItem.className="permission-item";
-           
-           const isChecked=permissions[key]||false;
-           
-           permissionItem.innerHTML=`
-               <input type="checkbox" id="perm-${key}" ${isChecked?"checked":""}>
-               <label for="perm-${key}">${label}</label>
-           `;
-           
-           permissionsGrid.appendChild(permissionItem);
-       });
-        
-        document.getElementById("permissions-modal").dataset.userId=userId;
+        document.getElementById("permissions-email").textContent = userData.email;
+        document.getElementById("permissions-role").value = userData.role || "karbantarto";
+        document.getElementById("permissions-status").textContent = userData.lastLogin ? "Aktív" : "Inaktív";
+
+        const permissionsGrid = document.getElementById("permissions-grid");
+        permissionsGrid.innerHTML = "";
+
+        // Minden jogosultság létrehozása
+Object.keys(PERMISSION_LABELS).forEach(permissionKey => {
+    const permissionItem = document.createElement("div");
+    permissionItem.className = "permission-item";
+    
+    // Biztosítjuk, hogy boolean legyen az érték
+    const isChecked = permissions[permissionKey] === true;
+
+    permissionItem.innerHTML = `
+        <input type="checkbox" id="perm-${permissionKey}">
+        <label for="perm-${permissionKey}">${PERMISSION_LABELS[permissionKey]}</label>
+    `;
+    
+    // Utólag állítjuk be a checked tulajdonságot, ami biztosabb mint a string összefűzés
+    const checkbox = permissionItem.querySelector('input');
+    checkbox.checked = isChecked;
+
+    permissionsGrid.appendChild(permissionItem);
+});
+
+        document.getElementById("permissions-modal").dataset.userId = userId;
         document.getElementById("permissions-modal").classList.add("active");
-        
-    }catch(e){
-        console.error("Hiba a jogosultságok betöltésekor:",e);
+
+    } catch (e) {
+        console.error("Hiba a jogosultságok betöltésekor:", e);
         showNotification("Hiba a jogosultságok betöltésekor");
     }
 }
 
-async function savePermissions(){
-    const modal=document.getElementById("permissions-modal");
-    const userId=modal.dataset.userId;
-    
-    if(!userId){
+// Javított savePermissions() függvény
+async function savePermissions() {
+    const modal = document.getElementById("permissions-modal");
+    const userId = modal.dataset.userId;
+
+    if (!userId) {
         showNotification("Nincs kiválasztott felhasználó");
         return;
     }
-    
-    try{
-        const role=document.getElementById("permissions-role").value;
-        const permissions={};
+
+    try {
+        const role = document.getElementById("permissions-role").value;
+        const permissions = {};
+
+        // Összegyűjtjük az összes checkbox állapotát - JAVÍTVA
+        const checkboxes = document.querySelectorAll('#permissions-grid input[type="checkbox"]');
         
-        Object.keys(PERMISSIONS).forEach(key=>{
-            const checkbox=document.getElementById(`perm-${key}`);
-            permissions[key]=checkbox.checked;
+        checkboxes.forEach(checkbox => {
+            const permissionId = checkbox.id.replace('perm-', '');
+            permissions[permissionId] = checkbox.checked;
         });
-        
+
         await db.collection("users").doc(userId).update({
-            role:role,
-            permissions:permissions,
-            updated:firebase.firestore.FieldValue.serverTimestamp()
+            role: role,
+            permissions: permissions,
+            updated: firebase.firestore.FieldValue.serverTimestamp()
         });
-        
-        userCache.set(userId+"_role",role);
-        
-        if(userId===currentUser.uid){
-            currentUserRole=role;
+
+        userCache.set(userId + "_role", role);
+
+        if (userId === currentUser.uid) {
+            currentUserRole = role;
             updateUserRoleDisplay();
             toggleAdminPanel();
         }
-        
+
         await loadAllUsersList();
         showNotification(`Felhasználó jogosultságai frissítve: ${ROLE_LABELS[role]}`);
         closePermissionsModal();
-        
-    }catch(e){
-        console.error("Hiba a jogosultságok mentésekor:",e);
+
+    } catch (e) {
+        console.error("Hiba a jogosultságok mentésekor:", e);
         showNotification("Hiba a jogosultságok mentésekor");
     }
 }
@@ -4390,14 +4772,14 @@ document.getElementById("registrationForm").addEventListener("submit",async e=>{
         const userCredential=await auth.createUserWithEmailAndPassword(email,password);
         const user=userCredential.user;
         
-        await db.collection("users").doc(user.uid).set({
-            email:email,
-            nickname:nickname,
-            role:role,
-            permissions:DEFAULT_PERMISSIONS[role]||{},
-            createdAt:firebase.firestore.FieldValue.serverTimestamp(),
-            lastLogin:firebase.firestore.FieldValue.serverTimestamp()
-        });
+await db.collection("users").doc(user.uid).set({
+    email: user.email,
+    nickname: currentUserNickname,
+    role: currentUserRole,
+    permissions: await getUserPermissions(user.uid, currentUserRole), // MÓDOSÍTVA
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+});
         
         errorElement.classList.remove("show");
         showNotification("Sikeres regisztráció!");
