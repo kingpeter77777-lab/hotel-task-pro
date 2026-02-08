@@ -4971,7 +4971,7 @@ function renderPluginView() {
                         <input type="password" id="groqApiKeyInput" value="${apiKey}" placeholder="gsk_..." style="flex:1; padding:10px; border-radius:8px; border:1px solid #ccc">
                         <button class="btn" onclick="saveGroqKey()" style="background:var(--primary)">Mentés</button>
                     </div>
-                    <small style="color:var(--gray)">Az API kulcs csak a böngésződben (localStorage) tárolódik.</small>
+                    <small style="color:var(--gray)">Demo API kulcs: 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</small>
                 </div>
             </div>
             
