@@ -19,7 +19,7 @@ if (!groqApiKey) {
         "3. Generálj egy API kulcsot\n" +
         "4. Másold ide:\n\n" +
         "A kulcs a böngésződben tárolódik, SOHA nem kerül máshova.",
-        "gsk_..."
+        "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"
     );
     
     if (userKey && userKey.trim()) {
