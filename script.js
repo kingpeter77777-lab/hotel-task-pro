@@ -4886,9 +4886,9 @@ let nexusAI = null;
  * Plugin rendszer inicializálása
  */
 function initPluginSystem() {
-    // Csak Admin láthatja a menüt
+    // Minden bejelentkezett felhasználó láthatja a plugin menüt
     const pluginMenuBtn = document.getElementById('pluginMenuBtn');
-    if (pluginMenuBtn && currentUserRole === 'admin') {
+    if (pluginMenuBtn) {
         pluginMenuBtn.style.display = 'flex';
     }
 
