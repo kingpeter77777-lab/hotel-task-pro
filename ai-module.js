@@ -1,8 +1,36 @@
 /* ==========================================================================
    AURA AI ASSISTANT v1.6.1 - Hotel Task Pro AI Asszisztens
-   Teljesen javított: Radiális menü, kompakt üzenetek, görgethető szobalista
-   Státusz ikonok, mobil optimalizáció, színjavítások
+   TESZT MOD - Ingatlan Groq API kulcs
    ========================================================================== */
+
+// ⚠ FIGYELEM: A kulcs csak a böngésződben tárolódik!
+// Ha teszteled mással, mondd meg, hogy generáljon saját kulcsot!
+
+// API kulcs beállítása - TEDD IDE A SAJÁT KULCSOD!
+let groqApiKey = localStorage.getItem(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);
+
+// Ha nincs kulcs, kérjük a felhasználótól
+if (!groqApiKey) {
+    // Egyszerű prompt ablak
+    const userKey = prompt(
+        "🔐 Aura AI - Groq API kulcs szükséges\n\n" +
+        "1. Menj a https://console.groq.com/keys oldalra\n" +
+        "2. Regisztrálj (ingyenes)\n" +
+        "3. Generálj egy API kulcsot\n" +
+        "4. Másold ide:\n\n" +
+        "A kulcs a böngésződben tárolódik, SOHA nem kerül máshova.",
+        "gsk_..."
+    );
+    
+    if (userKey && userKey.trim()) {
+        groqApiKey = userKey.trim();
+        localStorage.setItem('groq_api_key', groqApiKey);
+        alert("✅ Kulcs mentve! Oldal újratöltése...");
+        location.reload();
+    } else {
+        alert("⚠ API kulcs nélkül az AI nem működik!");
+    }
+}=================================================================== */
 
 class AIChatPlugin {
     constructor(firebaseDB, firebaseAuth, appData) {
@@ -23,7 +51,7 @@ class AIChatPlugin {
         };
         
         // API konfiguráció
-        this.groqApiKey = localStorage.getItem('groq_api_key') || '';
+        this.groqApiKey = groqApiKey || localStorage.getItem('groq_api_key') || '';
         this.selectedModel = localStorage.getItem('aura_model') || "llama-3.3-70b-versatile";
         this.availableModels = [
             { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B", maxTokens: 8192 },
